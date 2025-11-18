@@ -1,0 +1,4 @@
+<Solution>
+  <Project Path="MyOwnServer/MyOwnServer.csproj" />
+  <Project Path="MyOwnServer_Test/MyOwnServer_Test.csproj" Id="26393277-3eb3-4298-9e13-9ec83ef072fe" />
+</Solution>
