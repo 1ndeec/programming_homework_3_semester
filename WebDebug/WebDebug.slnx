@@ -1,0 +1,4 @@
+<Solution>
+  <Project Path="MyNUnit/MyNUnit/MyNUnit.csproj" />
+  <Project Path="WebDebug/WebDebug.csproj" />
+</Solution>

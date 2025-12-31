@@ -1,0 +1,22 @@
+﻿@page
+@model IndexModel
+
+<h1>Upload DLLs</h1>
+
+<form method="post" enctype="multipart/form-data">
+    <input name="Files" type="file" multiple accept=".dll" />
+    <button type="submit">Start testing</button>
+</form>
+
+@if (!ModelState.IsValid)
+{
+    <div style="color:#b00020;">
+        @foreach (var error in ViewData.ModelState.Values.SelectMany(v => v.Errors))
+        {
+            <div>@error.ErrorMessage</div>
+        }
+    </div>
+}
+
+<hr />
+<a asp-page="/Runs/Index">Runs history</a>

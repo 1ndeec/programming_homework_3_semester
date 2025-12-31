@@ -1,0 +1,25 @@
+﻿@page
+@model WebDebug.Pages.Runs.IndexModel
+<h1>Runs history</h1>
+
+<table>
+    <thead>
+        <tr><th>Time</th><th>Total</th><th>Passed</th><th>Failed</th><th>Skipped</th><th></th></tr>
+    </thead>
+    <tbody>
+        @foreach (var r in Model.Runs)
+        {
+            <tr>
+                <td>@r.CreatedAt</td>
+                <td>@r.Total</td>
+                <td>@r.Passed</td>
+                <td>@r.Failed</td>
+                <td>@r.Skipped</td>
+                <td><a asp-page="/Runs/Details" asp-route-id="@r.Id">Details</a></td>
+            </tr>
+        }
+    </tbody>
+</table>
+
+<hr />
+<a asp-page="/Index">Upload more</a>
