@@ -1,7 +1,7 @@
 ﻿// Copyright (c) Murat Khamatyanov. All rights reserved.
 // Licensed under the MIT license. See LICENSE file in the project root for full license information.
 
-namespace MatrixProduct;
+namespace MatrixMultiplication;
 
 using System.Dynamic;
 using static System.Runtime.InteropServices.JavaScript.JSType;
@@ -12,8 +12,6 @@ using static System.Runtime.InteropServices.JavaScript.JSType;
 /// </summary>
 public class Matrix
 {
-    private int height;
-    private int width;
     private long[][] data;
 
     /// <summary>
@@ -22,8 +20,6 @@ public class Matrix
     public Matrix()
     {
         this.data = new long[0][];
-        this.height = 0;
-        this.width = 0;
     }
 
     /// <summary>
@@ -36,11 +32,11 @@ public class Matrix
     public Matrix(long[][] data)
     {
         this.data = data;
-        this.height = data.Length;
-        this.width = data[0].Length;
-        for (int i = 0; i < this.height; i++)
+        int height = data.Length;
+        int width = data[0].Length;
+        for (int i = 0; i < height; i++)
         {
-            if (this.data[i].Length != this.width)
+            if (this.data[i].Length != width)
             {
                 throw new InvalidDataException("Matrix cant contain strings of different lengths");
             }
@@ -57,14 +53,14 @@ public class Matrix
     public Matrix(string path)
     {
         string[] matrixText = File.ReadAllLines(path);
-        this.height = matrixText.Length;
-        this.data = new long[this.height][];
-        this.width = matrixText[0].Split(" ").Length;
+        int height = matrixText.Length;
+        this.data = new long[height][];
+        int width = matrixText[0].Split(" ").Length;
 
-        for (int i = 0; i < this.height; i++)
+        for (int i = 0; i < height; i++)
         {
             this.data[i] = matrixText[i].Split(" ").Select(x => Convert.ToInt64(x)).ToArray();
-            if (this.data[i].Length != this.width)
+            if (this.data[i].Length != width)
             {
                 throw new InvalidDataException("Matrix cant contain strings of different lengths");
             }
@@ -78,19 +74,23 @@ public class Matrix
     /// <returns><c>true</c> if the matrices have the same dimensions and values; otherwise, <c>false</c>.</returns>
     public bool Equals(Matrix second)
     {
-        if (second == null || second.height != this.height || second.width != this.width)
+        int secondHeight = second.data.Length;
+        int thisHeight = this.data.Length;
+        int secondWidth = second.data[0].Length;
+        int thisWidth = this.data[0].Length;
+        if (second == null || secondHeight != thisHeight || secondWidth != thisWidth)
         {
             return false;
         }
 
-        for (int i = 0; i < this.height; i++)
+        for (int i = 0; i < thisHeight; i++)
         {
             if (second.data[i] == null || this.data[i] == null)
             {
                 return false;
             }
 
-            for (int j = 0; j < this.width; j++)
+            for (int j = 0; j < thisWidth; j++)
             {
                 if (this.data[i][j] != second.data[i][j])
                 {
@@ -111,33 +111,37 @@ public class Matrix
     /// in the first matrix does not equal the number of rows in the second.</exception>
     public Matrix SyncProduct(Matrix second)
     {
-        if (this.width != second.height)
+        int secondHeight = second.data.Length;
+        int thisHeight = this.data.Length;
+        int secondWidth = second.data[0].Length;
+        int thisWidth = this.data[0].Length;
+        if (thisWidth != secondHeight)
         {
             throw new ArgumentException("The number of rows in the argument matrix must equal the number of columns in the calling matrix.");
         }
 
-        var secondDataTransposed = new long[second.width][];
-        for (int j = 0; j < second.width; j++)
+        var secondDataTransposed = new long[secondWidth][];
+        for (int j = 0; j < secondWidth; j++)
         {
-            secondDataTransposed[j] = new long[this.width];
+            secondDataTransposed[j] = new long[thisWidth];
         }
 
-        for (int k = 0; k < this.width; k++)
+        for (int k = 0; k < thisWidth; k++)
         {
             var row = second.data[k];
-            for (int j = 0; j < second.width; j++)
+            for (int j = 0; j < secondWidth; j++)
             {
                 secondDataTransposed[j][k] = row[j];
             }
         }
 
-        var newData = new long[this.height][];
-        for (int i = 0; i < this.height; i++)
+        var newData = new long[thisHeight][];
+        for (int i = 0; i < thisHeight; i++)
         {
-            newData[i] = new long[second.width];
-            for (int j = 0; j < second.width; j++)
+            newData[i] = new long[secondWidth];
+            for (int j = 0; j < secondWidth; j++)
             {
-                for (int k = 0; k < this.width; k++)
+                for (int k = 0; k < thisWidth; k++)
                 {
                     newData[i][j] += this.data[i][k] * secondDataTransposed[j][k];
                 }
@@ -155,23 +159,27 @@ public class Matrix
     /// <returns>A new <see cref="Matrix"/> containing the result of the multiplication.</returns>
     /// <exception cref="ArgumentException">Thrown when the number of columns
     /// in the first matrix does not equal the number of rows in the second.</exception>
-    public Matrix AsyncProduct(Matrix second, int threadsNumber)
+    public Matrix ParalellProduct(Matrix second, int threadsNumber)
     {
-        if (this.width != second.height)
+        int secondHeight = second.data.Length;
+        int thisHeight = this.data.Length;
+        int secondWidth = second.data[0].Length;
+        int thisWidth = this.data[0].Length;
+        if (thisWidth != secondHeight)
         {
             throw new ArgumentException("The number of rows in the argument matrix must equal the number of columns in the calling matrix.");
         }
 
-        var secondDataTransposed = new long[second.width][];
-        for (int j = 0; j < second.width; j++)
+        var secondDataTransposed = new long[secondWidth][];
+        for (int j = 0; j < secondWidth; j++)
         {
-            secondDataTransposed[j] = new long[this.width];
+            secondDataTransposed[j] = new long[thisWidth];
         }
 
-        for (int k = 0; k < this.width; k++)
+        for (int k = 0; k < thisWidth; k++)
         {
             var row = second.data[k];
-            for (int j = 0; j < second.width; j++)
+            for (int j = 0; j < secondWidth; j++)
             {
                 secondDataTransposed[j][k] = row[j];
             }
@@ -179,10 +187,10 @@ public class Matrix
 
         var threads = new Thread[threadsNumber];
 
-        var newData = new long[this.height][];
-        for (int i = 0; i < this.height; i++)
+        var newData = new long[thisHeight][];
+        for (int i = 0; i < thisHeight; i++)
         {
-            newData[i] = new long[second.width];
+            newData[i] = new long[secondWidth];
         }
 
         for (int threadIndex = 0; threadIndex < threadsNumber; threadIndex++)
@@ -191,11 +199,11 @@ public class Matrix
             threads[index] = new Thread(() =>
             {
                 // Each thread processes a set of rows from the first matrix and multiplies them by every column of the second matrix
-                for (int i = index; i < this.height; i += threadsNumber)
+                for (int i = index; i < thisHeight; i += threadsNumber)
                 {
-                    for (int j = 0; j < second.width; j++)
+                    for (int j = 0; j < secondWidth; j++)
                     {
-                        for (int k = 0; k < this.width; k++)
+                        for (int k = 0; k < thisWidth; k++)
                         {
                             newData[i][j] += this.data[i][k] * secondDataTransposed[j][k];
                         }
