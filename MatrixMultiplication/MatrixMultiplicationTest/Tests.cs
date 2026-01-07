@@ -24,7 +24,7 @@ public sealed class Tests
         string secondPath = "../../../TestData/Sample1_second.txt";
         string outputPath = "../../../TestData/Sample1_report.txt";
 
-        Assert.IsTrue(this.BringStatistics(firstPath, secondPath, outputPath));
+        Assert.IsTrue(MatStat.BringStatistics(firstPath, secondPath, outputPath));
     }
 
     /// <summary>
@@ -38,7 +38,7 @@ public sealed class Tests
         string secondPath = "../../../TestData/Sample2_second.txt";
         string outputPath = "../../../TestData/Sample2_report.txt";
 
-        Assert.IsTrue(this.BringStatistics(firstPath, secondPath, outputPath));
+        Assert.IsTrue(MatStat.BringStatistics(firstPath, secondPath, outputPath));
     }
 
     /// <summary>
@@ -52,7 +52,7 @@ public sealed class Tests
         string secondPath = "../../../TestData/Sample3_second.txt";
         string outputPath = "../../../TestData/Sample3_report.txt";
 
-        Assert.IsTrue(this.BringStatistics(firstPath, secondPath, outputPath));
+        Assert.IsTrue(MatStat.BringStatistics(firstPath, secondPath, outputPath));
     }
 
     /// <summary>

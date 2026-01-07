@@ -1,10 +1,13 @@
 ﻿// Copyright (c) Murat Khamatyanov. All rights reserved.
 // Licensed under the MIT license. See LICENSE file in the project root for full license information.
 
-using System.Diagnostics;
-
 namespace MatrixMultiplication;
 
+using System.Diagnostics;
+
+/// <summary>
+/// Class for statistical methods used for analytics.
+/// </summary>
 public class MatStat
 {
     /// <summary>
@@ -16,7 +19,7 @@ public class MatStat
     /// <param name="secondPath">Path to the right matrix file.</param>
     /// <param name="pathOutput">Path to the report file to append statistics.</param>
     /// <returns><c>true</c> if the asynchronous and synchronous results are equal; otherwise, <c>false</c>.</returns>
-    public bool BringStatistics(string firstPath, string secondPath, string pathOutput)
+    public static bool BringStatistics(string firstPath, string secondPath, string pathOutput)
     {
         int repetitionNumber = 20;
         int threadNumber = 16;
