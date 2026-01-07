@@ -9,7 +9,7 @@ namespace LazyInterface;
 /// concurrently from multiple threads.
 /// </summary>
 /// <typeparam name="T">The type of the value to be lazily initialized.</typeparam>
-public class AsyncLazy<T> : ILazy<T>
+public class ParalellLazy<T> : ILazy<T>
 {
     private T? value;
     private Func<T>? supplier;
@@ -17,14 +17,15 @@ public class AsyncLazy<T> : ILazy<T>
     private object lockHolder = new object();
 
     /// <summary>
-    /// Initializes a new instance of the <see cref="AsyncLazy{T}"/> class
+    /// Initializes a new instance of the <see cref="ParalellLazy{T}"/> class
     /// with the specified supplier function.
     /// </summary>
     /// <param name="supply">
     /// A function that computes and returns the value when it is first requested.
     /// </param>
-    public AsyncLazy(Func<T> supply)
+    public ParalellLazy(Func<T> supply)
     {
+        ArgumentNullException.ThrowIfNull(supply);
         this.supplier = supply;
     }
 
@@ -37,18 +38,21 @@ public class AsyncLazy<T> : ILazy<T>
     /// <returns>The computed or cached value of type <typeparamref name="T"/>.</returns>
     public T Get()
     {
+        if (this.isExecuted)
+        {
+            return this.value!;
+        }
+
         lock (this.lockHolder)
         {
             if (!this.isExecuted)
             {
-                ArgumentNullException.ThrowIfNull(this.supplier, "Null supplier");
-                this.value = this.supplier();
+                this.value = this.supplier!();
                 this.supplier = null;
                 this.isExecuted = true;
             }
 
-            ArgumentNullException.ThrowIfNull(this.value, "Null value");
-            return this.value;
+            return this.value!;
         }
     }
 }

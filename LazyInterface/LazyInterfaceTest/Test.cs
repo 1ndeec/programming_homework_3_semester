@@ -3,133 +3,109 @@
 
 namespace LazyInterfaceTest;
 
+using System;
+using System.Collections.Generic;
+using System.Linq;
+using System.Threading;
+using System.Threading.Tasks;
 using LazyInterface;
+using Microsoft.VisualStudio.TestTools.UnitTesting;
 
 /// <summary>
-/// Test class for SyncLazy and AsyncLazy classes.
+/// Contains unit tests for <see cref="ILazy{T}"/> implementations.
+/// Includes shared behavior tests for both implementations and a dedicated concurrency test for <see cref="ParalellLazy{T}"/>.
 /// </summary>
 [TestClass]
 public sealed class Test
 {
     /// <summary>
-    /// Verifies that <see cref="SyncLazy{T}"/> correctly computes and caches
-    /// the value on first access, and that multiple instances using the same
-    /// supplier function work independently.
+    /// Provides factories for creating different <see cref="ILazy{T}"/> implementations to be used in data-driven tests.
     /// </summary>
-    [TestMethod]
-    public void TestSyncNormal()
+    /// <returns>
+    /// A sequence of test cases where each case contains:
+    /// a display name and a factory function that constructs an <see cref="ILazy{T}"/> from a supplier.
+    /// </returns>
+    public static IEnumerable<object[]> LazyFactories()
     {
-        Func<int> func = () => 2 + 2;
-        SyncLazy<int> syncLazy1 = new SyncLazy<int>(func);
-        SyncLazy<int> syncLazy2 = new SyncLazy<int>(func);
-        SyncLazy<int> syncLazy3 = new SyncLazy<int>(() => 2 + 4);
-        Assert.AreEqual(syncLazy1.Get(), 4);
-        Assert.AreEqual(syncLazy1.Get(), 4);
-        Assert.AreEqual(syncLazy2.Get(), 4);
-        Assert.AreEqual(syncLazy2.Get(), 4);
-        Assert.AreEqual(syncLazy3.Get(), 6);
-        Assert.AreEqual(syncLazy3.Get(), 6);
-    }
-
-    /// <summary>
-    /// Verifies that <see cref="SyncLazy{T}"/> correctly handles a supplier
-    /// that returns <c>null</c> and does not throw an exception when the
-    /// computed value itself is <c>null</c>.
-    /// </summary>
-    [ExpectedException(typeof(ArgumentNullException))]
-    [TestMethod]
-    public void TestNullValueSync()
-    {
-        Func<object?> func = () => null;
-        #pragma warning disable CS8620
-        SyncLazy<object> syncLazy1 = new SyncLazy<object>(func);
-        #pragma warning restore CS8620
-        Assert.IsNull(syncLazy1.Get());
-    }
-
-    /// <summary>
-    /// Validates that <see cref="SyncLazy{T}"/> throws an
-    /// <see cref="ArgumentNullException"/> when initialized with a <c>null</c> supplier function.
-    /// </summary>
-    [TestMethod]
-    [ExpectedException(typeof(ArgumentNullException))]
-    public void TestNullFuncSync()
-    {
-        #pragma warning disable CS8625
-        SyncLazy<object> syncLazy1 = new SyncLazy<object>(null);
-        #pragma warning restore CS8625
-        syncLazy1.Get();
-    }
-
-    /// <summary>
-    /// Tests <see cref="AsyncLazy{T}"/> for correct behavior under concurrent access.
-    /// Verifies that multiple threads obtain the same computed value, ensuring
-    /// that lazy initialization occurs only once.
-    /// </summary>
-    [TestMethod]
-    public void TestAsyncNormal()
-    {
-        Func<int> func = () =>
+        yield return new object[]
         {
-            int i = 0;
-            for (; i < 50; i++)
-            {
-            }
-
-            return i;
+            new Func<Func<object?>, ILazy<object?>>(s => new SyncLazy<object?>(s!)),
         };
 
-        AsyncLazy<int> asyncLazy1 = new AsyncLazy<int>(func);
-        AsyncLazy<int> asyncLazy2 = new AsyncLazy<int>(func);
-        int asyncLazy1result = 0;
-        int asyncLazy2result = 0;
-
-        for (int i = 0; i < 100; i++)
+        yield return new object[]
         {
-            Thread thread1 = new Thread(() =>
-            {
-                asyncLazy1result = asyncLazy1.Get();
-            });
+            new Func<Func<object?>, ILazy<object?>>(s => new ParalellLazy<object?>(s!)),
+        };
+    }
 
-            Thread thread2 = new Thread(() =>
+    /// <summary>
+    /// Verifies that calling <c>Get()</c> multiple times returns the same cached value
+    /// and that the supplier is executed exactly once.
+    /// </summary>
+    /// <param name="factory">A factory that creates an <see cref="ILazy{T}"/> instance from a supplier.</param>
+    [DataTestMethod]
+    [DynamicData(nameof(LazyFactories), DynamicDataSourceType.Method)]
+    public void SupplierIsCalledOnce_OnMultipleGets(Func<Func<object?>, ILazy<object?>> factory)
+    {
+        int calls = 0;
+        Func<object?> supplier = () =>
+        {
+            Interlocked.Increment(ref calls);
+            return 123;
+        };
+
+        var lazy = factory(supplier);
+
+        var a = lazy.Get();
+        var b = lazy.Get();
+        var c = lazy.Get();
+
+        Assert.AreEqual(123, a);
+        Assert.AreEqual(123, b);
+        Assert.AreEqual(123, c);
+        Assert.AreEqual(1, calls);
+    }
+
+    /// <summary>
+    /// Verifies that passing a <c>null</c> supplier to the constructor throws <see cref="ArgumentNullException"/>.
+    /// </summary>
+    /// <param name="factory">A factory that creates an <see cref="ILazy{T}"/> instance from a supplier.</param>
+    [DataTestMethod]
+    [DynamicData(nameof(LazyFactories), DynamicDataSourceType.Method)]
+    public void Constructor_Throws_OnNullSupplier(Func<Func<object?>, ILazy<object?>> factory)
+    {
+        Assert.ThrowsException<ArgumentNullException>(() => factory(null!));
+    }
+
+    /// <summary>
+    /// Verifies thread-safety of <see cref="ParalellLazy{T}"/>:
+    /// when many threads call <c>Get()</c> concurrently on the same instance,
+    /// the supplier is executed exactly once and all threads observe the same cached value.
+    /// </summary>
+    [TestMethod]
+    public void ParalellLazy_SupplierRunsOnce_WhenGetCalledConcurrently()
+    {
+        int calls = 0;
+
+        var lazy = new ParalellLazy<int>(() => Interlocked.Increment(ref calls));
+
+        const int workers = 20;
+        var startBarrier = new Barrier(workers + 1);
+
+        var tasks = new Task<int>[workers];
+        for (int i = 0; i < workers; i++)
+        {
+            tasks[i] = Task.Run(() =>
             {
-                asyncLazy2result = asyncLazy2.Get();
+                startBarrier.SignalAndWait();
+                return lazy.Get();
             });
-            thread1.Start();
-            thread2.Start();
-            thread1.Join();
-            thread2.Join();
-            Assert.AreEqual(asyncLazy1result, asyncLazy2result);
         }
-    }
 
-    /// <summary>
-    /// Validates that <see cref="AsyncLazy{T}"/> throws an
-    /// <see cref="ArgumentNullException"/> when created with a <c>null</c> supplier function.
-    /// </summary>
-    [TestMethod]
-    [ExpectedException(typeof(ArgumentNullException))]
-    public void TestNullFuncAsync()
-    {
-        #pragma warning disable CS8625
-        AsyncLazy<object> asyncLazy1 = new AsyncLazy<object>(null);
-        #pragma warning restore CS8625
-        asyncLazy1.Get();
-    }
+        startBarrier.SignalAndWait();
+        Task.WaitAll(tasks);
 
-    /// <summary>
-    /// Verifies that <see cref="AsyncLazy{T}"/> properly throws an
-    /// <see cref="ArgumentNullException"/> when the supplier function
-    /// returns <c>null</c>, ensuring null results are handled as invalid.
-    /// </summary>
-    [TestMethod]
-    [ExpectedException(typeof(ArgumentNullException))]
-    public void TestNullValueAsync()
-    {
-        Func<object?> func = () => null;
-        #pragma warning disable CS8620
-        AsyncLazy<object> asyncLazy1 = new AsyncLazy<object>(func);
-        #pragma warning restore CS8620
-        asyncLazy1.Get();
+        Assert.AreEqual(1, calls, "Supplier must be called exactly once.");
+        Assert.IsTrue(tasks.All(t => t.Result == 1), "All threads must see the same cached value.");
     }
 }

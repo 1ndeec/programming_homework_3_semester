@@ -23,6 +23,7 @@ public class SyncLazy<T> : ILazy<T>
     /// </param>
     public SyncLazy(Func<T> supply)
     {
+        this.supplier = supply ?? throw new ArgumentNullException(nameof(supply));
         this.supplier = supply;
     }
 
@@ -35,8 +36,7 @@ public class SyncLazy<T> : ILazy<T>
     {
         if (!this.isExecuted)
         {
-            ArgumentNullException.ThrowIfNull(this.supplier, "Null supplier");
-            this.value = this.supplier();
+            this.value = this.supplier!();
             this.isExecuted = true;
             this.supplier = null;
         }
