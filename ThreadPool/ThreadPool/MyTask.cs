@@ -8,14 +8,18 @@ namespace ThreadPool;
 /// Supports continuations and result retrieval.
 /// </summary>
 /// <typeparam name="TResult">The type of result produced by the task.</typeparam>
-public class MyTask<TResult> : IMyTask<TResult>
+internal class MyTask<TResult> : IMyTask<TResult>
 {
+    private readonly object continuationsLock = new();
+
     private Func<TResult> task;
     private MyThreadPool scheduler;
     private TResult? result;
-    private Exception capturedException = new Exception("Placeholder");
-    private ManualResetEventSlim gates = new ManualResetEventSlim();
+    private Exception? capturedException;
+    private ManualResetEventSlim gates = new();
     private int isStarted = 0;
+
+    private List<Action>? continuations;
 
     /// <summary>
     /// Initializes a new instance of the <see cref="MyTask{TResult}"/> class with a given function and thread pool.
@@ -43,29 +47,14 @@ public class MyTask<TResult> : IMyTask<TResult>
     {
         get
         {
-            if (this.scheduler.IsItOverForPool && this.isStarted == 0)
-            {
-                throw new InvalidOperationException("Parent thread pool shut down.");
-            }
+            this.gates.Wait();
 
-            if (!this.gates.IsSet)
-            {
-                this.gates.Wait();
-            }
-
-            if (this.capturedException.Message != "Placeholder")
+            if (this.capturedException is not null)
             {
                 throw new AggregateException(this.capturedException);
             }
 
-            if (this.result != null)
-            {
-                return this.result;
-            }
-            else
-            {
-                throw new InvalidOperationException("Method attempted to return a null value.");
-            }
+            return this.result!;
         }
     }
 
@@ -77,9 +66,22 @@ public class MyTask<TResult> : IMyTask<TResult>
     /// <returns>A new task representing the continuation.</returns>
     public IMyTask<TNewResult> ContinueWith<TNewResult>(Func<TResult, TNewResult> followingTask)
     {
-        Func<TNewResult> loadedFollowingTask = () => followingTask(this.Result);
-        MyTask<TNewResult> continuationTask = new MyTask<TNewResult>(loadedFollowingTask, this.scheduler);
-        if (this.IsCompleted)
+        ArgumentNullException.ThrowIfNull(followingTask);
+
+        var continuationTask = new MyTask<TNewResult>(() => followingTask(this.Result), this.scheduler);
+
+        bool enqueueNow;
+        lock (this.continuationsLock)
+        {
+            enqueueNow = this.IsCompleted;
+            if (!enqueueNow)
+            {
+                this.continuations ??= new List<Action>();
+                this.continuations.Add(() => this.scheduler.AddTask(continuationTask));
+            }
+        }
+
+        if (enqueueNow)
         {
             this.scheduler.AddTask(continuationTask);
         }
@@ -108,6 +110,7 @@ public class MyTask<TResult> : IMyTask<TResult>
         finally
         {
             this.gates.Set();
+            this.RunContinuations();
         }
     }
 
@@ -115,4 +118,25 @@ public class MyTask<TResult> : IMyTask<TResult>
     /// Releases all resources used by the task.
     /// </summary>
     public void Dispose() => this.gates.Dispose();
+
+    private void RunContinuations()
+    {
+        List<Action>? toRun = null;
+
+        lock (this.continuationsLock)
+        {
+            toRun = this.continuations;
+            this.continuations = null;
+        }
+
+        if (toRun is null)
+        {
+            return;
+        }
+
+        foreach (var action in toRun)
+        {
+            action();
+        }
+    }
 }

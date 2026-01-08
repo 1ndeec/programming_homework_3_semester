@@ -11,9 +11,10 @@ using System.Collections.Concurrent;
 /// </summary>
 public class MyThreadPool
 {
+    private readonly object sync = new();
     private Thread[] threads = new Thread[1];
-    private BlockingCollection<Action> taskQueue = new BlockingCollection<Action>();
-    private CancellationTokenSource cts = new CancellationTokenSource();
+    private BlockingCollection<Action> taskQueue = new();
+    private bool isShutdown;
 
     /// <summary>
     /// Initializes a new instance of the <see cref="MyThreadPool"/> class
@@ -23,20 +24,17 @@ public class MyThreadPool
     public MyThreadPool(int n)
     {
         this.threads = new Thread[n];
+
         for (int i = 0; i < n; i++)
         {
             this.threads[i] = new Thread(() =>
             {
                 foreach (var task in this.taskQueue.GetConsumingEnumerable())
                 {
-                    if (this.cts.IsCancellationRequested)
-                    {
-                        return;
-                    }
-
                     task();
                 }
             });
+
             this.threads[i].Start();
         }
     }
@@ -44,18 +42,7 @@ public class MyThreadPool
     /// <summary>
     /// Gets a value indicating whether ThreadPool is shut down or not.
     /// </summary>
-    public bool IsItOverForPool
-    {
-        get
-        {
-            if (this.cts.IsCancellationRequested)
-            {
-                return true;
-            }
-
-            return false;
-        }
-    }
+    public bool IsItOverForPool => this.isShutdown;
 
     /// <summary>
     /// Adds a task to the thread pool’s work queue for execution.
@@ -66,13 +53,18 @@ public class MyThreadPool
     /// <exception cref="InvalidOperationException">Thrown when attempting to queue a task after shutdown.</exception>
     public IMyTask<TResult> AddTask<TResult>(IMyTask<TResult> task)
     {
-        ArgumentNullException.ThrowIfNull(task, "Null task");
-        if (this.cts.IsCancellationRequested)
+        ArgumentNullException.ThrowIfNull(task);
+
+        lock (this.sync)
         {
-            throw new InvalidOperationException("Cannot queue a task: the thread pool is shutting down.");
+            if (this.isShutdown)
+            {
+                throw new InvalidOperationException("Cannot queue a task: the thread pool is shutting down.");
+            }
+
+            this.taskQueue.Add(task.Execute);
         }
 
-        this.taskQueue.Add(task.Execute);
         return task;
     }
 
@@ -82,11 +74,15 @@ public class MyThreadPool
     /// </summary>
     public void Shutdown()
     {
-        this.cts.Cancel();
-        this.taskQueue.CompleteAdding();
-        foreach (var thread in this.threads)
+        lock (this.sync)
         {
-            thread.Join();
+            this.isShutdown = true;
+            this.taskQueue.CompleteAdding(); // stop accepting new tasks
+        }
+
+        foreach (var t in this.threads)
+        {
+            t.Join();
         }
     }
 }

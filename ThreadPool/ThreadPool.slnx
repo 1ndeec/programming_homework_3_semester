@@ -1,4 +1,0 @@
-<Solution>
-  <Project Path="ThreadPool/ThreadPool.csproj" />
-  <Project Path="ThreadPoolTest/ThreadPoolTest.csproj" />
-</Solution>
