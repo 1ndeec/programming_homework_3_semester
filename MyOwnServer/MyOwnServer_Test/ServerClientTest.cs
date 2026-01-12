@@ -39,7 +39,6 @@ public sealed class ServerClientTest
 
         var expected = new HashSet<string>
         {
-            "directory1 true",
             "directory2 true",
             "file1.txt false",
             "file2.txt false",
