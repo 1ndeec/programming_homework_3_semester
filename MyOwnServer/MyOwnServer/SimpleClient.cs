@@ -9,7 +9,7 @@ using System.Text;
 /// <summary>
 /// Simple TCP client that communicates with SimpleServer.
 /// </summary>
-public class SimpleClient
+public class SimpleClient : IDisposable
 {
     private TcpClient client;
     private NetworkStream stream;
@@ -20,55 +20,64 @@ public class SimpleClient
     /// Initializes a new instance of the <see cref="SimpleClient"/> class.
     /// </summary>
     /// <param name="port">Port of the server.</param>
-    public SimpleClient(int port)
+    /// <param name="host">Host ip.</host>
+    public SimpleClient(int port, string host = "localhost")
     {
-        this.client = new TcpClient("localhost", port);
+        this.client = new TcpClient(host, port);
         this.stream = this.client.GetStream();
         this.writer = new StreamWriter(this.stream) { AutoFlush = true };
         this.reader = new StreamReader(this.stream);
     }
 
     /// <summary>
-    /// Sends a request to list the contents of the directory at <paramref name="path"/> 
+    /// Sends a request to list the contents of the directory at <paramref name="path"/>
     /// and prints each entry received from the server.
     /// </summary>
     /// <param name="path">Relative path of the directory to list.</param>
+    /// <param name="ct"> CancellationToken. </param>
     /// <returns>A task representing the asynchronous operation.</returns>
-    public async Task List(string path)
+    public async Task<List<string>> AsyncList(string path, CancellationToken ct = default)
     {
-        this.writer.WriteLine($"1 {path}");
-        int count = Convert.ToInt32(await this.reader.ReadLineAsync());
+        await this.writer.WriteLineAsync($"1 {path}").ConfigureAwait(false);
+        var line = await this.reader.ReadLineAsync().ConfigureAwait(false);
+        int count = Convert.ToInt32(line);
+
+        var items = new List<string>(count);
+
         if (count == -1)
         {
-            Console.WriteLine("Directory not found");
+            items.Add("Directory not found");
         }
         else
         {
             for (int i = 0; i < count; i++)
             {
-                Console.WriteLine(await this.reader.ReadLineAsync());
+                line = await this.reader.ReadLineAsync(ct).ConfigureAwait(false);
+                items.Add(line ?? string.Empty);
             }
         }
+
+        return items;
     }
 
     /// <summary>
     /// Requests a file at <paramref name="path"/> and prints its size and content.
     /// </summary>
     /// <param name="path">Relative file path.</param>
+    /// <param name="ct"> CancellationToken. </param>
     /// <returns>A task representing the asynchronous operation.</returns>
-    public async Task Get(string path)
+    public async Task<(int Size, string Content)> AsyncGet(string path, CancellationToken ct = default)
     {
-        this.writer.WriteLine($"2 {path}");
+        await this.writer.WriteLineAsync($"2 {path}").ConfigureAwait(false);
 
         string sizeText = string.Empty;
         while (true)
         {
             var temp = new byte[1];
-            int read = await this.stream.ReadAsync(temp, 0, 1);
+            int read = await this.stream.ReadAsync(temp, 0, 1).ConfigureAwait(false);
             if (read == 0)
             {
-                Console.WriteLine("Connection closed");
-                return;
+                throw new IOException("Connection closed.");
             }
 
             if (temp[0] == (byte)' ' || temp[0] == (byte)'\n')
@@ -82,37 +91,40 @@ public class SimpleClient
         int size = int.Parse(sizeText);
         if (size == -1)
         {
-            Console.WriteLine("File not found");
-            return;
+            return (-1, string.Empty);
         }
-
-        Console.Write($"{size} ");
 
         byte[] buffer = new byte[size];
         int totalRead = 0;
+
         while (totalRead < size)
         {
-            int read = await this.stream.ReadAsync(buffer, totalRead, size - totalRead);
+            int read = await this.stream.ReadAsync(buffer, totalRead, size - totalRead).ConfigureAwait(false);
             if (read == 0)
             {
-                Console.WriteLine("Connection closed early");
-                return;
+                throw new IOException("Connection closed early.");
             }
 
-            Console.Write(Encoding.UTF8.GetString(buffer));
             totalRead += read;
         }
 
-        Console.Write("\n");
+        string content = Encoding.UTF8.GetString(buffer);
+        return (size, content);
     }
 
     /// <summary>
     /// Closes the connection and disposes all resources.
     /// </summary>
-    public void Close()
+    public void Close() => this.Dispose();
+
+    /// <summary>
+    /// Dispose method.
+    /// </summary>
+    public void Dispose()
     {
+        this.reader.Dispose();
         this.writer.Dispose();
         this.stream.Dispose();
-        this.client.Close();
+        this.client.Dispose();
     }
 }
