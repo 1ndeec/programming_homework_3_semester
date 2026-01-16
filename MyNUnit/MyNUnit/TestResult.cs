@@ -7,27 +7,6 @@ using System;
 using System.Reflection;
 
 /// <summary>
-/// Represents the outcome of a test.
-/// </summary>
-public enum TestStatus
-{
-    /// <summary>
-    /// The test completed without errors.
-    /// </summary>
-    Passed,
-
-    /// <summary>
-    /// The test threw an unexpected exception.
-    /// </summary>
-    Failed,
-
-    /// <summary>
-    /// The test was skipped.
-    /// </summary>
-    Skipped,
-}
-
-/// <summary>
 /// Stores information about an executed test.
 /// </summary>
 public sealed class TestResult

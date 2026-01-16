@@ -19,13 +19,11 @@ public class SimpleNUnit
     /// <exception cref="ArgumentNullException">
     /// Thrown if required test attributes or their properties are not found.
     /// </exception>
-    public async Task StartTests(string path)
+    public async Task AsyncStartTests(string path)
     {
         var dlls = Directory.GetFiles(path, "*.dll");
 
-        var allResults = new List<TestResult>();
-
-        foreach (string dll in dlls)
+        var dllTasks = dlls.Select(async dll =>
         {
             var a = Assembly.LoadFrom(dll);
 
@@ -59,20 +57,15 @@ public class SimpleNUnit
 
             var tasks = a.ExportedTypes.Select(t => RunTestForTypeAsync(t, attrs)).ToList();
             var classResults = await Task.WhenAll(tasks);
+            return classResults.SelectMany(x => x);
+        });
 
-            foreach (var list in classResults)
-            {
-                allResults.AddRange(list);
-            }
-        }
-
+        var allResults = (await Task.WhenAll(dllTasks)).SelectMany(x => x).ToList();
         PrintReport(allResults);
     }
 
     private static async Task<List<TestResult>> RunTestForTypeAsync(Type t, AttributeSet attrs)
     {
-        var classResults = new List<TestResult>();
-
         var beforeClass = new List<MethodInfo>();
         var afterClass = new List<MethodInfo>();
         var before = new List<MethodInfo>();
@@ -97,47 +90,132 @@ public class SimpleNUnit
             }
         }
 
-        var instance = Activator.CreateInstance(t);
-
-        foreach (var beforeClassMethod in beforeClass)
+        foreach (var m in beforeClass)
         {
-            if (!beforeClassMethod.IsStatic)
+            var err = ValidateMethodSignature(m, "BeforeClass", mustBeStatic: true, mustBeInstance: false);
+            if (err != null)
             {
-                throw new InvalidOperationException("BeforeClass method must be static");
+                Console.WriteLine(err);
+                return tests
+                    .Select(tm => new TestResult(tm.Method, TestStatus.Errored, TimeSpan.Zero, err))
+                    .ToList();
             }
-
-            await InvokeMaybeAsync(beforeClassMethod, null);
         }
 
-        var testTasks = tests.Select(async testMethod =>
+        foreach (var m in afterClass)
         {
-            foreach (var beforeMethod in before)
+            var err = ValidateMethodSignature(m, "AfterClass", mustBeStatic: true, mustBeInstance: false);
+            if (err != null)
             {
-                await InvokeMaybeAsync(beforeMethod, instance);
+                Console.WriteLine(err);
+                return tests
+                    .Select(tm => new TestResult(tm.Method, TestStatus.Errored, TimeSpan.Zero, err))
+                    .ToList();
+            }
+        }
+
+        foreach (var m in before)
+        {
+            var err = ValidateMethodSignature(m, "Before", mustBeStatic: false, mustBeInstance: true);
+            if (err != null)
+            {
+                Console.WriteLine(err);
+                return tests
+                    .Select(tm => new TestResult(tm.Method, TestStatus.Errored, TimeSpan.Zero, err))
+                    .ToList();
+            }
+        }
+
+        foreach (var m in after)
+        {
+            var err = ValidateMethodSignature(m, "After", mustBeStatic: false, mustBeInstance: true);
+            if (err != null)
+            {
+                Console.WriteLine(err);
+                return tests
+                    .Select(tm => new TestResult(tm.Method, TestStatus.Errored, TimeSpan.Zero, err))
+                    .ToList();
+            }
+        }
+
+        try
+        {
+            foreach (var beforeClassMethod in beforeClass)
+            {
+                await InvokeMaybeAsync(beforeClassMethod, null);
+            }
+        }
+        catch (Exception ex)
+        {
+            var msg = $"BeforeClass failed in {t.FullName}: {ex.GetType().Name}: {ex.Message}";
+            Console.WriteLine(msg);
+
+            return tests.Select(tm => new TestResult(tm.Method, TestStatus.Errored, TimeSpan.Zero, msg)).ToList();
+        }
+
+        var testTasks = tests.Select(async test =>
+        {
+            object instance;
+            try
+            {
+                instance = Activator.CreateInstance(t)!;
+            }
+            catch (Exception ex)
+            {
+                var msg = $"Constructor failed for {t.FullName}: {ex.GetType().Name}: {ex.Message}";
+                Console.WriteLine(msg);
+                return new TestResult(test.Method, TestStatus.Errored, TimeSpan.Zero, msg);
             }
 
-            var result = await testMethod.RunAsync(instance);
-            classResults.Add(result);
-
-            foreach (var afterMethod in after)
+            try
             {
-                await InvokeMaybeAsync(afterMethod, instance);
+                foreach (var m in before)
+                {
+                    await InvokeMaybeAsync(m, instance);
+                }
             }
+            catch (Exception ex)
+            {
+                var msg = $"Before failed for {t.FullName}.{test.Method.Name}: {ex.GetType().Name}: {ex.Message}";
+                Console.WriteLine(msg);
+                return new TestResult(test.Method, TestStatus.Errored, TimeSpan.Zero, msg);
+            }
+
+            var r = await test.RunAsync(instance);
+
+            try
+            {
+                foreach (var m in after)
+                {
+                    await InvokeMaybeAsync(m, instance);
+                }
+            }
+            catch (Exception ex)
+            {
+                var msg = $"After failed for {t.FullName}.{test.Method.Name}: {ex.GetType().Name}: {ex.Message}";
+                Console.WriteLine(msg);
+                return new TestResult(test.Method, TestStatus.Errored, r.Duration, msg);
+            }
+
+            return r;
         });
 
-        await Task.WhenAll(testTasks);
+        var results = await Task.WhenAll(testTasks);
 
-        foreach (var afterClassMethod in afterClass)
+        try
         {
-            if (!afterClassMethod.IsStatic)
+            foreach (var m in afterClass)
             {
-                throw new InvalidOperationException("AfterClass method must be static");
+                await InvokeMaybeAsync(m, null);
             }
-
-            await InvokeMaybeAsync(afterClassMethod, null);
+        }
+        catch (Exception ex)
+        {
+            var msg = $"AfterClass failed in {t.FullName}: {ex.GetType().Name}: {ex.Message}";
+            Console.WriteLine(msg);
         }
 
-        return classResults;
+        return results.ToList();
     }
 
     private static async Task InvokeMaybeAsync(MethodInfo method, object? instance)
@@ -155,7 +233,7 @@ public class SimpleNUnit
 
     private static void PrintReport(IEnumerable<TestResult> results)
     {
-        int passed = 0, failed = 0, skipped = 0;
+        int passed = 0, failed = 0, skipped = 0, errored = 0;
 
         foreach (var r in results)
         {
@@ -167,6 +245,11 @@ public class SimpleNUnit
                 case TestStatus.Passed:
                     passed++;
                     Console.WriteLine($"PASS  {name}  ({timeMs} ms)");
+                    break;
+
+                case TestStatus.Errored:
+                    errored++;
+                    Console.WriteLine($"ERROR  {name}  ({timeMs} ms)");
                     break;
 
                 case TestStatus.Failed:
@@ -182,6 +265,32 @@ public class SimpleNUnit
         }
 
         Console.WriteLine();
-        Console.WriteLine($"Summary: passed={passed}, failed={failed}, skipped={skipped}");
+        Console.WriteLine($"Summary: passed={passed}, failed={failed}, skipped={skipped}, errored={errored}");
+    }
+
+    private static string? ValidateMethodSignature(MethodInfo m, string role, bool mustBeStatic, bool mustBeInstance)
+    {
+        if (mustBeStatic && !m.IsStatic)
+        {
+            return $"{role} method '{m.DeclaringType?.FullName}.{m.Name}' must be static.";
+        }
+
+        if (mustBeInstance && m.IsStatic)
+        {
+            return $"{role} method '{m.DeclaringType?.FullName}.{m.Name}' must be non-static.";
+        }
+
+        if (m.GetParameters().Length != 0)
+        {
+            return $"{role} method '{m.DeclaringType?.FullName}.{m.Name}' must not take parameters.";
+        }
+
+        var rt = m.ReturnType;
+        if (rt != typeof(void) && rt != typeof(Task))
+        {
+            return $"{role} method '{m.DeclaringType?.FullName}.{m.Name}' must return void or Task (actual: {rt}).";
+        }
+
+        return null;
     }
 }

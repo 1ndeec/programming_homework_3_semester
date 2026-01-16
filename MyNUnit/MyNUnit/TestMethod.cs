@@ -14,6 +14,7 @@ public class TestMethod
     private readonly MethodInfo method;
     private string? ignoreReason;
     private Type? expectedException;
+    private string? signatureError;
 
     /// <summary>
     /// Initializes a new instance of the <see cref="TestMethod"/> class.
@@ -22,6 +23,12 @@ public class TestMethod
     public TestMethod(MethodInfo data)
     {
         this.method = data;
+
+        this.signatureError = ValidateTestMethodSignature(data);
+        if (this.signatureError != null)
+        {
+            Console.WriteLine(this.signatureError);
+        }
 
         foreach (Attribute attr in Attribute.GetCustomAttributes(data))
         {
@@ -40,6 +47,11 @@ public class TestMethod
     }
 
     /// <summary>
+    /// Gets the methodinfo of method.
+    /// </summary>
+    public MethodInfo Method => this.method;
+
+    /// <summary>
     /// Runs the test method and returns its result.
     /// Handles sync and async tests, expected exceptions, and skipped tests.
     /// </summary>
@@ -48,6 +60,15 @@ public class TestMethod
     /// <exception cref="ArgumentException">Thrown when reflection produces invalid state.</exception>
     public async Task<TestResult> RunAsync(object? instance)
     {
+        if (this.signatureError != null)
+        {
+            return new TestResult(
+                this.method,
+                TestStatus.Errored,
+                TimeSpan.Zero,
+                this.signatureError);
+        }
+
         if (this.ignoreReason != null)
         {
             return new TestResult(
@@ -76,7 +97,11 @@ public class TestMethod
 
             if (ex == null)
             {
-                throw new ArgumentException("Expected an inner exception.");
+                return new TestResult(
+                    this.method,
+                    TestStatus.Errored,
+                    sw.Elapsed,
+                    "Invocation failed: TargetInvocationException had no InnerException.");
             }
 
             if (this.expectedException == null)
@@ -143,5 +168,26 @@ public class TestMethod
         }
 
         return new TestResult(this.method, TestStatus.Passed, sw.Elapsed);
+    }
+
+    private static string? ValidateTestMethodSignature(MethodInfo m)
+    {
+        if (m.IsStatic)
+        {
+            return $"Test method '{m.DeclaringType?.FullName}.{m.Name}' must be non-static.";
+        }
+
+        if (m.GetParameters().Length != 0)
+        {
+            return $"Test method '{m.DeclaringType?.FullName}.{m.Name}' must not take parameters.";
+        }
+
+        var rt = m.ReturnType;
+        if (rt != typeof(void) && rt != typeof(Task))
+        {
+            return $"Test method '{m.DeclaringType?.FullName}.{m.Name}' must return void or Task (actual: {rt}).";
+        }
+
+        return null;
     }
 }
