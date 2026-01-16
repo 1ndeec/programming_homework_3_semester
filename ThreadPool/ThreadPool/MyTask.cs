@@ -70,6 +70,18 @@ internal class MyTask<TResult> : IMyTask<TResult>
 
         var continuationTask = new MyTask<TNewResult>(() => followingTask(this.Result), this.scheduler);
 
+        Action enqueue = () =>
+        {
+            try
+            {
+                this.scheduler.AddTask(continuationTask);
+            }
+            catch
+            {
+                continuationTask.Execute();
+            }
+        };
+
         bool enqueueNow;
         lock (this.continuationsLock)
         {
@@ -77,13 +89,13 @@ internal class MyTask<TResult> : IMyTask<TResult>
             if (!enqueueNow)
             {
                 this.continuations ??= new List<Action>();
-                this.continuations.Add(() => this.scheduler.AddTask(continuationTask));
+                this.continuations.Add(enqueue);
             }
         }
 
         if (enqueueNow)
         {
-            this.scheduler.AddTask(continuationTask);
+            enqueue();
         }
 
         return continuationTask;
@@ -118,6 +130,19 @@ internal class MyTask<TResult> : IMyTask<TResult>
     /// Releases all resources used by the task.
     /// </summary>
     public void Dispose() => this.gates.Dispose();
+
+    internal void Fail(Exception ex)
+    {
+        // Prevent later Execute() from running if it somehow gets enqueued
+        if (Interlocked.Exchange(ref this.isStarted, 1) == 1)
+        {
+            return;
+        }
+
+        this.capturedException = ex;
+        this.gates.Set();
+        this.RunContinuations();
+    }
 
     private void RunContinuations()
     {

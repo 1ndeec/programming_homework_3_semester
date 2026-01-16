@@ -31,7 +31,13 @@ public class MyThreadPool
             {
                 foreach (var task in this.taskQueue.GetConsumingEnumerable())
                 {
-                    task();
+                    try
+                    {
+                        task();
+                    }
+                    catch
+                    {
+                    }
                 }
             });
 
