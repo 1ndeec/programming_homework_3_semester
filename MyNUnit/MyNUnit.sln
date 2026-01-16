@@ -3,9 +3,9 @@ Microsoft Visual Studio Solution File, Format Version 12.00
 # Visual Studio Version 18
 VisualStudioVersion = 18.3.11312.210
 MinimumVisualStudioVersion = 10.0.40219.1
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "MyNUnit", "D:\programming_homework_3_semester\MyNUnit\MyNUnit\MyNUnit.csproj", "{2A82F9FE-DA14-04FD-3CAC-01E519748D6D}"
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "MyNUnit", "MyNUnit\MyNUnit\MyNUnit.csproj", "{2A82F9FE-DA14-04FD-3CAC-01E519748D6D}"
 EndProject
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "MyNUnit_Test", "D:\programming_homework_3_semester\MyNUnit\MyNUnit_Test\MyNUnit_Test.csproj", "{87029A88-6C11-D81C-F9E1-7EB28DC1083C}"
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "MyNUnit_Test", "MyNUnit\MyNUnit_Test\MyNUnit_Test.csproj", "{87029A88-6C11-D81C-F9E1-7EB28DC1083C}"
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "SampleBadTests", "SampleBadTests\SampleBadTests.csproj", "{5D61CA4B-077B-44EA-B00E-8A3567E103D9}"
 EndProject
