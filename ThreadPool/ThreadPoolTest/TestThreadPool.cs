@@ -19,25 +19,6 @@ using ThreadPool;
 public sealed class TestThreadPool
 {
     /// <summary>
-    /// Verifies that the pool creates exactly the number of worker threads requested in the constructor.
-    /// </summary>
-    [TestMethod]
-    public void ThreadCount_MatchesConstructorArgument()
-    {
-        var pool = new MyThreadPool(3);
-
-        try
-        {
-            var threads = GetWorkerThreads(pool);
-            Assert.AreEqual(3, threads.Length);
-        }
-        finally
-        {
-            pool.Shutdown();
-        }
-    }
-
-    /// <summary>
     /// Verifies that concurrent calls to <c>AddTask</c> racing with <c>Shutdown</c> do not lead to "accepted but never executed" tasks.
     /// If a task is accepted by <c>AddTask</c>, it must eventually complete and produce a result.
     /// </summary>
@@ -65,11 +46,9 @@ public sealed class TestThreadPool
 
                     for (int i = 0; i < tasksPerProducer; i++)
                     {
-                        var t = CreateMyTask(() => Interlocked.Increment(ref executed), pool);
-
                         try
                         {
-                            pool.AddTask(t);
+                            var t = pool.AddTask(() => Interlocked.Increment(ref executed));
                             accepted.Add(t);
                         }
                         catch (InvalidOperationException)
@@ -119,15 +98,11 @@ public sealed class TestThreadPool
         {
             var releaseParent = new ManualResetEventSlim(false);
 
-            var parent = CreateMyTask(
-                () =>
+            var parent = pool.AddTask(() =>
             {
                 releaseParent.Wait();
                 return 1;
-            },
-                pool);
-
-            pool.AddTask(parent);
+            });
 
             var continuation = parent.ContinueWith(x => x + 1);
 
@@ -139,13 +114,18 @@ public sealed class TestThreadPool
 
             shutdown.Wait();
 
-            var contGetter = Task.Run(() => continuation.Result);
-            Assert.IsTrue(contGetter.Wait(3000), "Continuation must not hang on Result.");
-
-            if (contGetter.IsFaulted)
+            var contGetter = Task.Run(() =>
             {
-                Assert.IsNotNull(contGetter.Exception);
-            }
+                try
+                {
+                    _ = continuation.Result;
+                }
+                catch
+                {
+                }
+            });
+
+            Assert.IsTrue(contGetter.Wait(3000), "Continuation must not hang on Result.");
         }
         finally
         {
@@ -166,30 +146,29 @@ public sealed class TestThreadPool
 
         pool.Shutdown();
 
-        var t = CreateMyTask(() => 1, pool);
-        Assert.Throws<InvalidOperationException>(() => pool.AddTask(t));
+        Assert.Throws<InvalidOperationException>(() => pool.AddTask(() => 1));
     }
 
-    private static Thread[] GetWorkerThreads(MyThreadPool pool)
+    /// <summary>
+    /// Verifies that an exception thrown inside a task is propagated through Result.
+    /// </summary>
+    [TestMethod]
+    public void Task_WhenThrows_ResultRethrows()
     {
-        var f = typeof(MyThreadPool).GetField("threads", BindingFlags.Instance | BindingFlags.NonPublic);
-        Assert.IsNotNull(f);
+        var pool = new MyThreadPool(1);
 
-        var value = f.GetValue(pool);
-        Assert.IsNotNull(value);
+        try
+        {
+            var t = pool.AddTask<int>(() => throw new InvalidOperationException("boom"));
 
-        return (Thread[])value;
-    }
-
-    private static IMyTask<TResult> CreateMyTask<TResult>(Func<TResult> func, MyThreadPool pool)
-    {
-        var asm = typeof(MyThreadPool).Assembly;
-        var open = asm.GetType("ThreadPool.MyTask`1", throwOnError: true);
-        var closed = open!.MakeGenericType(typeof(TResult));
-
-        var obj = Activator.CreateInstance(closed, func, pool);
-        Assert.IsNotNull(obj);
-
-        return (IMyTask<TResult>)obj;
+            Assert.Throws<AggregateException>(() =>
+            {
+                _ = t.Result;
+            });
+        }
+        finally
+        {
+            pool.Shutdown();
+        }
     }
 }

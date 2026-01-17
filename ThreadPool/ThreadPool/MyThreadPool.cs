@@ -54,23 +54,15 @@ public class MyThreadPool
     /// Adds a task to the thread pool’s work queue for execution.
     /// </summary>
     /// <typeparam name="TResult">The type of the result produced by the task.</typeparam>
-    /// <param name="task">The task to be executed by the thread pool.</param>
+    /// <param name="func">The func to be executed by the thread pool.</param>
     /// <returns>The same task instance that was added.</returns>
     /// <exception cref="InvalidOperationException">Thrown when attempting to queue a task after shutdown.</exception>
-    public IMyTask<TResult> AddTask<TResult>(IMyTask<TResult> task)
+    public IMyTask<TResult> AddTask<TResult>(Func<TResult> func)
     {
-        ArgumentNullException.ThrowIfNull(task);
+        ArgumentNullException.ThrowIfNull(func);
 
-        lock (this.sync)
-        {
-            if (this.isShutdown)
-            {
-                throw new InvalidOperationException("Cannot queue a task: the thread pool is shutting down.");
-            }
-
-            this.taskQueue.Add(task.Execute);
-        }
-
+        var task = new MyTask<TResult>(func, this);
+        this.Enqueue(task);
         return task;
     }
 
@@ -89,6 +81,27 @@ public class MyThreadPool
         foreach (var t in this.threads)
         {
             t.Join();
+        }
+    }
+
+    /// <summary>
+    /// Enqueues a task for execution by the thread pool.
+    /// </summary>
+    /// <typeparam name="TResult">The task result type.</typeparam>
+    /// <param name="task">The task to enqueue.</param>
+    /// <exception cref="InvalidOperationException">
+    /// Thrown if the thread pool is shutting down and no longer accepts new tasks.
+    /// </exception>
+    internal void Enqueue<TResult>(MyTask<TResult> task)
+    {
+        lock (this.sync)
+        {
+            if (this.isShutdown)
+            {
+                throw new InvalidOperationException("Cannot queue a task: the thread pool is shutting down.");
+            }
+
+            this.taskQueue.Add(task.Execute); // ok: Execute is internal
         }
     }
 }

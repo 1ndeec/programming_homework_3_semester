@@ -10,9 +10,9 @@ namespace ThreadPool;
 /// <typeparam name="TResult">The type of result produced by the task.</typeparam>
 internal class MyTask<TResult> : IMyTask<TResult>
 {
-    private readonly object continuationsLock = new();
+    private readonly Lock continuationsLock = new();
 
-    private Func<TResult> task;
+    private Func<TResult>? task;
     private MyThreadPool scheduler;
     private TResult? result;
     private Exception? capturedException;
@@ -74,11 +74,11 @@ internal class MyTask<TResult> : IMyTask<TResult>
         {
             try
             {
-                this.scheduler.AddTask(continuationTask);
+                this.scheduler.Enqueue(continuationTask);
             }
-            catch
+            catch (Exception ex)
             {
-                continuationTask.Execute();
+                continuationTask.Fail(ex);
             }
         };
 
@@ -113,7 +113,7 @@ internal class MyTask<TResult> : IMyTask<TResult>
 
         try
         {
-            this.result = this.task();
+            this.result = this.task!();
         }
         catch (Exception ex)
         {
@@ -124,6 +124,8 @@ internal class MyTask<TResult> : IMyTask<TResult>
             this.gates.Set();
             this.RunContinuations();
         }
+
+        this.task = null;
     }
 
     /// <summary>
@@ -131,9 +133,12 @@ internal class MyTask<TResult> : IMyTask<TResult>
     /// </summary>
     public void Dispose() => this.gates.Dispose();
 
+    /// <summary>
+    /// Marks the task as completed with an error and releases any waiters.
+    /// </summary>
+    /// <param name="ex">The exception that caused the task to fail.</param>
     internal void Fail(Exception ex)
     {
-        // Prevent later Execute() from running if it somehow gets enqueued
         if (Interlocked.Exchange(ref this.isStarted, 1) == 1)
         {
             return;
@@ -161,7 +166,13 @@ internal class MyTask<TResult> : IMyTask<TResult>
 
         foreach (var action in toRun)
         {
-            action();
+            try
+            {
+                action();
+            }
+            catch
+            {
+            }
         }
     }
 }

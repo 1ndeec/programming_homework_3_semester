@@ -26,9 +26,4 @@ public interface IMyTask<TResult>
     /// <param name="followingTask">A function to execute after the current task finishes, using its result as input.</param>
     /// <returns>A new task representing the continuation.</returns>
     IMyTask<TNewResult> ContinueWith<TNewResult>(Func<TResult, TNewResult> followingTask);
-
-    /// <summary>
-    /// Executes the task’s assigned action.
-    /// </summary>
-    public void Execute();
 }
