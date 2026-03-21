@@ -1,0 +1,34 @@
+Sync expectation: 4 ticks
+Sync standard deviation: 3 ticks
+Number of threads: 1, async expectation: 1088 ticks
+Number of threads: 1, async standard deviation: 362 ticks
+Number of threads: 2, async expectation: 1729 ticks
+Number of threads: 2, async standard deviation: 208 ticks
+Number of threads: 3, async expectation: 2561 ticks
+Number of threads: 3, async standard deviation: 360 ticks
+Number of threads: 4, async expectation: 3055 ticks
+Number of threads: 4, async standard deviation: 303 ticks
+Number of threads: 5, async expectation: 3726 ticks
+Number of threads: 5, async standard deviation: 341 ticks
+Number of threads: 6, async expectation: 4516 ticks
+Number of threads: 6, async standard deviation: 411 ticks
+Number of threads: 7, async expectation: 5006 ticks
+Number of threads: 7, async standard deviation: 354 ticks
+Number of threads: 8, async expectation: 5274 ticks
+Number of threads: 8, async standard deviation: 411 ticks
+Number of threads: 9, async expectation: 6533 ticks
+Number of threads: 9, async standard deviation: 698 ticks
+Number of threads: 10, async expectation: 7738 ticks
+Number of threads: 10, async standard deviation: 3947 ticks
+Number of threads: 11, async expectation: 7581 ticks
+Number of threads: 11, async standard deviation: 877 ticks
+Number of threads: 12, async expectation: 8138 ticks
+Number of threads: 12, async standard deviation: 929 ticks
+Number of threads: 13, async expectation: 9293 ticks
+Number of threads: 13, async standard deviation: 1420 ticks
+Number of threads: 14, async expectation: 10136 ticks
+Number of threads: 14, async standard deviation: 1359 ticks
+Number of threads: 15, async expectation: 10209 ticks
+Number of threads: 15, async standard deviation: 880 ticks
+Number of threads: 16, async expectation: 11095 ticks
+Number of threads: 16, async standard deviation: 1106 ticks
