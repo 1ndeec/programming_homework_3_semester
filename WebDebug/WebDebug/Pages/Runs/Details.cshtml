@@ -1,0 +1,34 @@
+﻿@page
+@model WebDebug.Pages.Runs.DetailsModel
+
+<h1>Run details</h1>
+
+<div>
+    <b>Time:</b> @Model.Run!.CreatedAt <br />
+    <b>Total:</b> @Model.Run.Total |
+    <b>Passed:</b> @Model.Run.Passed |
+    <b>Failed:</b> @Model.Run.Failed |
+    <b>Skipped:</b> @Model.Run.Skipped
+</div>
+
+<hr />
+
+<table>
+    <thead>
+        <tr><th>Test</th><th>Status</th><th>Duration (ms)</th><th>Message</th></tr>
+    </thead>
+    <tbody>
+    @foreach (var t in Model.Results)
+    {
+        <tr>
+            <td>@t.FullName</td>
+            <td>@t.Status</td>
+            <td>@t.DurationMs</td>
+            <td>@t.Message</td>
+        </tr>
+    }
+    </tbody>
+</table>
+
+<hr />
+<a asp-page="/Runs/Index">Back to history</a>
